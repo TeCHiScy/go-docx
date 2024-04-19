@@ -26,6 +26,8 @@ var (
 	HeaderPathRegex = regexp.MustCompile(`word/header[0-9]*.xml`)
 	// FooterPathRegex matches all footer files inside the docx-archive.
 	FooterPathRegex = regexp.MustCompile(`word/footer[0-9]*.xml`)
+	// MediaPathRegex matches all media files inside the docx-archive.
+	MediaPathRegex = regexp.MustCompile(`word/media/*`)
 )
 
 // Document exposes the main API of the library.  It represents the actual docx document which is going to be modified.
@@ -42,6 +44,8 @@ type Document struct {
 	headerFiles []string
 	// paths to all footer files inside the zip archive
 	footerFiles []string
+	// paths to all media files inside the zip archive
+	mediaFiles []string
 	// The document contains multiple files which eventually need a parser each.
 	// The map key is the file path inside the document to which the parser belongs.
 	runParsers map[string]*RunParser
@@ -168,7 +172,7 @@ func (d *Document) GetPlaceHoldersList() ([]string, error) {
 	for file := range d.files {
 		if _, ok := d.runParsers[file]; !ok {
 			return nil, fmt.Errorf("no parser for file %s", file)
-		}		
+		}
 		replacer := d.fileReplacers[file]
 		placeholders := replacer.placeholders
 		for _, placeholder := range placeholders {
@@ -178,6 +182,7 @@ func (d *Document) GetPlaceHoldersList() ([]string, error) {
 
 	return placeholdersTextList, nil
 }
+
 // replace will create a parser on the given bytes, execute it and replace every placeholders found with the data
 // from the placeholderMap.
 func (d *Document) replace(placeholderMap PlaceholderMap, file string) ([]byte, error) {
@@ -320,6 +325,10 @@ func (d *Document) parseArchive() error {
 			d.files[file.Name] = readZipFile(file)
 			d.footerFiles = append(d.footerFiles, file.Name)
 		}
+		if MediaPathRegex.MatchString(file.Name) {
+			d.files[file.Name] = readZipFile(file)
+			d.mediaFiles = append(d.mediaFiles, file.Name)
+		}
 	}
 	return nil
 }
@@ -402,6 +411,7 @@ func (d *Document) Write(writer io.Writer) error {
 // isModifiedFile will look through all modified files and check if the searchFileName exists
 func (d *Document) isModifiedFile(searchFileName string) bool {
 	allFiles := append(d.headerFiles, d.footerFiles...)
+	allFiles = append(allFiles, d.mediaFiles...)
 	allFiles = append(allFiles, DocumentXml)
 
 	for _, file := range allFiles {
